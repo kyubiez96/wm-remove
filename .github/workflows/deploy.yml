@@ -37,7 +37,7 @@ jobs:
           RENDER_OWNER_ID: tea-dajkqelg1s2s73b4v3s0
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
 
