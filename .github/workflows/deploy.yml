@@ -27,6 +27,17 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           IMAGE: ghcr.io/kyubiez96/wm-remove:latest
 
+      - name: Make GHCR image public
+        run: |
+          curl -fsS -X PUT \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/json" \
+            "https://api.github.com/user/packages/container/wm-remove/visibility" \
+            -d '{"visibility":"public"}'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Trigger Render deploy
         run: |
           curl -fsS -X POST "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys?ownerId=${RENDER_OWNER_ID}" \
