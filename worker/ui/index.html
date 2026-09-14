@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>wm-remove</title>
+<style>
+  :root{color-scheme:dark}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100dvh;background:#0b1020;color:#e2e8f0;
+       font-family:ui-sans-serif,system-ui,sans-serif;display:grid;place-items:center;padding:20px}
+  main{width:min(560px,94vw);display:grid;gap:16px;padding:24px;border-radius:14px;
+       background:#141b33;border:1px solid #2b3a67}
+  header{display:flex;justify-content:space-between;align-items:center}
+  h1{margin:0;font-size:1.2rem;color:#a5b4fc;display:flex;gap:8px}
+  .badge{font-size:.7rem;background:#1e253d;border:1px solid #334;border-radius:99px;padding:3px 10px;color:#94a3b8;align-self:center}
+  #drop{border:2px dashed #3b4a78;border-radius:12px;padding:34px 16px;text-align:center;
+        color:#8ea0c8;cursor:pointer;transition:.15s}
+  #drop.drag{border-color:#6366f1;background:#1b2540;color:#c7d2fe}
+  #drop input{display:none}
+  #status{font-size:.82rem;color:#94a3b8;min-height:1.2em;white-space:pre-wrap}
+  #err{color:#fca5a5;font-size:.82rem;white-space:pre-wrap}
+  details{margin-top:6px}
+  summary{cursor:pointer;color:#a5b4fc;font-size:.82rem}
+  #report{font-size:.78rem;color:#94a3b8;white-space:pre-wrap;max-height:200px;overflow:auto}
+  a#dl{display:inline-block;margin-top:10px;padding:10px 14px;border-radius:8px;background:#6366f1;
+       color:#fff;text-decoration:none;font-weight:600;text-align:center}
+  .foot{display:flex;justify-content:space-between;align-items:center;font-size:.75rem;color:#64748b}
+  form{margin:0}
+  .out{font-size:.72rem;color:#64748b}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>🧹 wm-remove</h1>
+    <span class="badge" id="health">backend: checking…</span>
+  </header>
+  <p class="out">Strips AI provenance marks and metadata from files you own. Images, video/audio, PDF/DOCX/EPUB, and plain text (Layer A). Text deep-rewrite (Layer B) needs an LLM backend and is off until configured.</p>
+  <div id="drop">Drop a file here or click to browse<br/><small>≤ 10 MB · text, images, audio/video, documents</small>
+    <input type="file" id="file"/>
+  </div>
+  <div id="status"></div>
+  <div id="err"></div>
+  <details>
+    <summary>result report</summary>
+    <div id="report">—</div>
+  </details>
+  <form method="post" action="logout"><button type="submit" style="background:none;border:0;color:#64748b;cursor:pointer;font-size:.75rem;text-align:left">sign out</button></form>
+</main>
+<script>
+  const M = "/wm-remove";
+  const MAX = 10 * 1024 * 1024;
+  const drop = document.getElementById("drop");
+  const file = document.getElementById("file");
+  const status = document.getElementById("status");
+  const err = document.getElementById("err");
+  const report = document.getElementById("report");
+  const health = document.getElementById("health");
+
+  drop.onclick = () => file.click();
+  drop.ondragover = (e) => { e.preventDefault(); drop.classList.add("drag"); };
+  drop.ondragleave = () => drop.classList.remove("drag");
+  drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove("drag"); if (e.dataTransfer.files[0]) handle(e.dataTransfer.files[0]); };
+  file.onchange = () => { if (file.files[0]) handle(file.files[0]); };
+
+  function setStatus(s) { status.textContent = s; }
+  function setErr(s) { err.textContent = s; }
+
+  async function checkHealth() {
+    try {
+      const r = await fetch(M + "/api/health", { cache: "no-store" });
+      if (r.ok) { const j = await r.json(); health.textContent = "backend: ok" + (j.version ? " " + j.version : ""); health.style.color = "#86efac"; }
+      else health.textContent = "backend: waking…";
+    } catch { health.textContent = "backend: waking…"; }
+  }
+  checkHealth();
+  setInterval(checkHealth, 30000);
+
+  async function handle(f) {
+    setErr(""); report.textContent = "—";
+    if (f.size > MAX) { setErr("File too large (max 10 MB)."); return; }
+    setStatus("Reading " + f.name + " …");
+    const b64 = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(String(r.result).split(",")[1]);
+      r.onerror = rej;
+      r.readAsDataURL(f);
+    });
+    setStatus("Sending to backend… (first use wakes the server; can take 30–120s)");
+    try {
+      const resp = await fetch(M + "/api/clean", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ file: b64, name: f.name, options: {} }),
+      });
+      const j = await resp.json();
+      if (!resp.ok || !j.ok) { setErr("Error: " + (j.error || resp.status + " " + resp.statusText)); setStatus(""); return; }
+      const bin = atob(j.cleaned);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const blob = new Blob([bytes], { type: "application/octet-stream" });
+      const dot = f.name.lastIndexOf(".");
+      const outName = (dot > 0 ? f.name.slice(0, dot) : f.name) + "_clean" + (dot > 0 ? f.name.slice(dot) : "");
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = outName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setStatus("Cleaned " + f.name + " → " + outName + " (" + Math.round(blob.size / 1024) + " KB).");
+      const rep = j.report || {};
+      report.textContent = JSON.stringify(rep, null, 2);
+    } catch (e) {
+      setErr("Request failed: " + e.message);
+    }
+    setStatus("Ready.");
+  }
+</script>
+</body>
+</html>

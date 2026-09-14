@@ -38,6 +38,9 @@
 !/requirements-dev.txt
 !/ruff.toml
 !/SECURITY.md
+!/Dockerfile
+!/worker/
+!/worker/**
 !/stealer/
 !/stealer/**
 

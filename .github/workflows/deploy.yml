@@ -12,41 +12,25 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Sync to HF Space
+      - name: Build and push image to GHCR
         run: |
-          pip install -q huggingface_hub
-          python3 - <<'EOF'
-          import os
-          from huggingface_hub import HfApi
-          api = HfApi(token=os.environ["HF_TOKEN"])
-          api.create_repo("Lucifearz/wm-remove", repo_type="space", space_sdk="docker", exist_ok=True)
-          api.upload_folder(
-              folder_path=".",
-              repo_id="Lucifearz/wm-remove",
-              repo_type="space",
-              ignore_patterns=[
-                  ".git/*", ".github/*", "worker/*", "tests/*", "benchmarks/*",
-                  "**/__pycache__/*", ".pytest_cache/*", ".env*",
-              ],
-          )
-          api.request_space_secret("Lucifearz/wm-remove", "WATERMARKS_SERVER_API_KEY", os.environ["WM_SPACE_KEY"])
-          api.request_space_variable("Lucifearz/wm-remove", "WATERMARKS_MAX_INPUT_BYTES", str(12 << 20))
-          try:
-              api.restart_space("Lucifearz/wm-remove")
-          except Exception:
-              pass
-          EOF
+          echo "${GITHUB_TOKEN}" | docker login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+          docker build -t "${IMAGE}" .
+          docker push "${IMAGE}"
         env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          WM_SPACE_KEY: ${{ secrets.WM_SPACE_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE: ghcr.io/kyubiez96/wm-remove:latest
+
+      - name: Trigger Render deploy
+        run: curl -fsS -X POST "${RENDER_DEPLOY_HOOK}"
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
 
       - name: Set up Node
         uses: actions/setup-node@v4
