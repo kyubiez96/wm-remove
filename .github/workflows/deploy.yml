@@ -27,14 +27,17 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           IMAGE: ghcr.io/kyubiez96/wm-remove:latest
 
-      - name: Make GHCR image public
+      - name: Make GHCR image public (best-effort)
         run: |
-          curl -fsS -X PUT \
+          code=$(curl -s -o /tmp/vis.json -w "%{http_code}" -X PUT \
             -H "Authorization: Bearer ${GITHUB_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
             -H "Content-Type: application/json" \
             "https://api.github.com/user/packages/container/wm-remove/visibility" \
-            -d '{"visibility":"public"}'
+            -d '{"visibility":"public"}')
+          if [ "$code" != "200" ] && [ "$code" != "204" ]; then
+            echo "::warning::visibility update skipped (HTTP $code: $(cat /tmp/vis.json))"
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
