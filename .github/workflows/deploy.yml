@@ -1,0 +1,92 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: wm-remove-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Sync to HF Space
+        run: |
+          pip install -q huggingface_hub
+          python3 - <<'EOF'
+          import os
+          from huggingface_hub import HfApi
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          api.create_repo("Lucifearz/wm-remove", repo_type="space", space_sdk="docker", exist_ok=True)
+          api.upload_folder(
+              folder_path=".",
+              repo_id="Lucifearz/wm-remove",
+              repo_type="space",
+              ignore_patterns=[
+                  ".git/*", ".github/*", "worker/*", "tests/*", "benchmarks/*",
+                  "**/__pycache__/*", ".pytest_cache/*", ".env*",
+              ],
+          )
+          api.request_space_secret("Lucifearz/wm-remove", "WATERMARKS_SERVER_API_KEY", os.environ["WM_SPACE_KEY"])
+          api.request_space_variable("Lucifearz/wm-remove", "WATERMARKS_MAX_INPUT_BYTES", str(12 << 20))
+          try:
+              api.restart_space("Lucifearz/wm-remove")
+          except Exception:
+              pass
+          EOF
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          WM_SPACE_KEY: ${{ secrets.WM_SPACE_KEY }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Deploy gate Worker
+        working-directory: worker
+        run: npx -y wrangler@4 deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Set Worker secrets
+        working-directory: worker
+        run: |
+          for pair in \
+            "SITE_PASSWORD=$SITE_PASSWORD" \
+            "COOKIE_SECRET=$COOKIE_SECRET" \
+            "SPACE_URL=$SPACE_URL" \
+            "SPACE_KEY=$SPACE_KEY"; do
+            key="${pair%%=*}"; val="${pair#*=}"
+            printf '%s' "$val" | npx -y wrangler@4 secret put "$key"
+          done
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          SITE_PASSWORD: ${{ secrets.WM_SITE_PASSWORD }}
+          COOKIE_SECRET: ${{ secrets.WM_COOKIE_SECRET }}
+          SPACE_URL: ${{ secrets.WM_SPACE_URL }}
+          SPACE_KEY: ${{ secrets.WM_SPACE_KEY }}
+
+      - name: Smoke test behind gate
+        run: |
+          for i in $(seq 1 6); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" -m 15 -c /tmp/cj https://eksi.biz.id/wm-remove/)
+            if [ "$code" = "200" ]; then
+              # login page served (not authed) — good enough route check
+              echo "gate route OK"; exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::wm-remove route not serving"; exit 1
