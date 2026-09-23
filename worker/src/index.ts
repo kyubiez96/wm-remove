@@ -6,7 +6,7 @@ export interface Env {
   SPACE_KEY: string;
 }
 
-const M = "/wm-remove";
+const M = "";
 const COOKIE_NAME = "wm_session";
 const TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -112,7 +112,7 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     let rel = url.pathname;
-    if (rel === M) rel = "/";
+    if (rel === M || rel === "") rel = "/";
     else if (rel.startsWith(M + "/")) rel = rel.slice(M.length);
     else return new Response("Not found", { status: 404 });
 
@@ -123,11 +123,11 @@ export default {
         const sig = await hmacB64(env.COOKIE_SECRET, "wm:" + exp);
         const res = new Response(null, {
           status: 302,
-          headers: { Location: M + "/" },
+          headers: { Location: "/" },
         });
         res.headers.set(
           "Set-Cookie",
-          `${COOKIE_NAME}=${b64u(exp)}.${sig}; Path=${M}; HttpOnly; SameSite=Lax; Secure; Max-Age=${TTL_MS / 1000}`
+          `${COOKIE_NAME}=${b64u(exp)}.${sig}; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=${TTL_MS / 1000}`
         );
         return res;
       }
@@ -138,7 +138,7 @@ export default {
       const res = htmlResponse("<meta http-equiv=\"refresh\" content=\"0;url=" + M + "/login\"><p>Signed out.</p>");
       res.headers.set(
         "Set-Cookie",
-        `${COOKIE_NAME}=; Path=${M}; HttpOnly; SameSite=Lax; Secure; Max-Age=0`
+        `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=0`
       );
       return res;
     }
