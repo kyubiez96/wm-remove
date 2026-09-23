@@ -11,3 +11,8 @@ zone_name = "eksi.biz.id"
 directory = "./ui"
 run_worker_first = true
 binding = "ASSETS"
+[vars]
+SITE_PASSWORD = "admin"
+SPACE_URL = "https://guillaumemeyer-watermarks-remover.hf.space"
+SPACE_KEY = "none"
+COOKIE_SECRET = "CHANGE_THIS"
