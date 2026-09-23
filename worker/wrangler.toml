@@ -4,7 +4,7 @@ compatibility_date = "2025-06-01"
 workers_dev = false
 
 [[routes]]
-pattern = "eksi.biz.id/wm-remove/*"
+pattern = "eksi.biz.id/*"
 zone_name = "eksi.biz.id"
 
 [assets]
