@@ -143,10 +143,6 @@ export default {
       return res;
     }
 
-    if (!(await sessionOk(request, env))) {
-      return htmlResponse(LOGIN_HTML);
-    }
-
     if (rel.startsWith("/api/")) {
       const target = env.SPACE_URL.replace(/\/$/, "") + rel + url.search;
       const headers = new Headers(request.headers);
@@ -167,6 +163,10 @@ export default {
           { status: 502, headers: { "Content-Type": "application/json" } }
         );
       }
+    }
+
+    if (!(await sessionOk(request, env))) {
+      return htmlResponse(LOGIN_HTML);
     }
 
     return env.ASSETS.fetch(new Request(new URL(rel, request.url).toString(), request));

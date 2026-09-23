@@ -69,7 +69,7 @@
 
   async function checkHealth() {
     try {
-      const r = await fetch(M + "/api/health", { cache: "no-store" });
+      const r = await fetch(M + "/api/health", { cache: "no-store", credentials: "same-origin" });
       if (r.ok) { const j = await r.json(); health.textContent = "backend: ok" + (j.version ? " " + j.version : ""); health.style.color = "#86efac"; }
       else health.textContent = "backend: waking…";
     } catch { health.textContent = "backend: waking…"; }
@@ -92,8 +92,15 @@
       const resp = await fetch(M + "/api/clean", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify({ file: b64, name: f.name, options: {} }),
       });
+      const ct = resp.headers.get("content-type") || "";
+      if (!ct.includes("application/json")) {
+        setErr("Error: Session expired or invalid backend response. Please refresh & sign in.");
+        setStatus("");
+        return;
+      }
       const j = await resp.json();
       if (!resp.ok || !j.ok) { setErr("Error: " + (j.error || resp.status + " " + resp.statusText)); setStatus(""); return; }
       const bin = atob(j.cleaned);
