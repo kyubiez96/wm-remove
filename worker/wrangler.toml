@@ -1,11 +1,8 @@
 name = "wm-remove-gate"
 main = "src/index.ts"
 compatibility_date = "2025-06-01"
-workers_dev = false
+workers_dev = true
 
-[[routes]]
-pattern = "eksi.biz.id/*"
-zone_name = "eksi.biz.id"
 
 [assets]
 directory = "./ui"
